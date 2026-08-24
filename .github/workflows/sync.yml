@@ -2,8 +2,8 @@ name: Sincronizar datos a Google Drive
 
 on:
   schedule:
-    # Corre cada 4 horas (UTC). Ajustá según necesites.
-    - cron: "0 */4 * * *"
+    # Corre a las 6:00 y 18:00 (UTC). Ajustá según necesites.
+    - cron: "0 11,23 * * *"
   workflow_dispatch: {}  # permite ejecutarlo manualmente desde la pestaña Actions
 
 jobs:
