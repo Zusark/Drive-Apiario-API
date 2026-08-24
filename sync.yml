@@ -1,0 +1,37 @@
+name: Sincronizar datos a Google Drive
+
+on:
+  schedule:
+    # Corre cada 4 horas (UTC). Ajustá según necesites.
+    - cron: "0 */4 * * *"
+  workflow_dispatch: {}  # permite ejecutarlo manualmente desde la pestaña Actions
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clonar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Escribir credenciales de la cuenta de servicio
+        run: echo "$GOOGLE_SERVICE_ACCOUNT_JSON" > service_account.json
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+
+      - name: Ejecutar sincronización
+        env:
+          DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+          SERVICE_ACCOUNT_FILE: service_account.json
+        run: python sync.py
+
+      - name: Limpiar credenciales
+        if: always()
+        run: rm -f service_account.json
