@@ -15,7 +15,8 @@ import os
 import sys
 
 import requests
-from google.oauth2 import service_account
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload
 
@@ -33,7 +34,9 @@ CSV_HEADER = ["estacion", "dispositivo", "fecha", "hora", "timestamp"] + FIELDS
 
 # Variables de entorno esperadas (se configuran como Secrets en GitHub Actions)
 DRIVE_FOLDER_ID = os.environ["DRIVE_FOLDER_ID"]
-SERVICE_ACCOUNT_FILE = os.environ.get("SERVICE_ACCOUNT_FILE", "service_account.json")
+OAUTH_CLIENT_ID = os.environ["GOOGLE_OAUTH_CLIENT_ID"]
+OAUTH_CLIENT_SECRET = os.environ["GOOGLE_OAUTH_CLIENT_SECRET"]
+OAUTH_REFRESH_TOKEN = os.environ["GOOGLE_OAUTH_REFRESH_TOKEN"]
 
 SCOPES = ["https://www.googleapis.com/auth/drive"]
 
@@ -101,9 +104,15 @@ def build_station_csv(station):
 # ------------------------------------------------------------------
 
 def get_drive_service():
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    creds = Credentials(
+        token=None,
+        refresh_token=OAUTH_REFRESH_TOKEN,
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=OAUTH_CLIENT_ID,
+        client_secret=OAUTH_CLIENT_SECRET,
+        scopes=SCOPES,
     )
+    creds.refresh(Request())  # cambia el refresh_token por un access_token válido
     return build("drive", "v3", credentials=creds)
 
 
@@ -114,7 +123,12 @@ def upload_or_replace_csv(drive_service, filename, content):
         f"and trashed = false"
     )
     results = drive_service.files().list(
-        q=query, fields="files(id, name)", spaces="drive"
+        q=query,
+        fields="files(id, name)",
+        spaces="drive",
+        supportsAllDrives=True,
+        includeItemsFromAllDrives=True,
+        corpora="allDrives",
     ).execute()
     files = results.get("files", [])
 
@@ -124,12 +138,14 @@ def upload_or_replace_csv(drive_service, filename, content):
 
     if files:
         file_id = files[0]["id"]
-        drive_service.files().update(fileId=file_id, media_body=media).execute()
+        drive_service.files().update(
+            fileId=file_id, media_body=media, supportsAllDrives=True
+        ).execute()
         print(f"  Actualizado: {filename} (id={file_id})")
     else:
         metadata = {"name": filename, "parents": [DRIVE_FOLDER_ID]}
         created = drive_service.files().create(
-            body=metadata, media_body=media, fields="id"
+            body=metadata, media_body=media, fields="id", supportsAllDrives=True
         ).execute()
         print(f"  Creado: {filename} (id={created['id']})")
 
